@@ -30,7 +30,7 @@ abstract class AbstractionDAL
        abstract function addObj($obj);
 
        // sửa một đối tượng
-       abstract function upadateObj($obj);
+       abstract function updateObj($obj);
 
        // abstract function checkLogin($username, $password);
 }

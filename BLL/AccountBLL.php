@@ -1,19 +1,10 @@
 <?php
 
-// gọi các lớp liên quan
-// require('../DAL/connectionDatabase.php');
-// require('../DAL/AbstractionDAL.php');
-// require('../DTO/AccountDTO.php');
-// require('../DAL/AccountDAL.php');
-
-// các thư viện liên quan gửi nhận mail.
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
-
-require('../PHPMailer-master/PHPMailer-master/src/PHPMailer.php');
-require('../PHPMailer-master/PHPMailer-master/src/Exception.php');
-require('../PHPMailer-master/PHPMailer-master/src/SMTP.php');
+// Include required classes
+require('../DAL/connectionDatabase.php');
+require('../DAL/AbstractionDAL.php');
+require('../DTO/AccountDTO.php');
+require('../DAL/AccountDAL.php');
 
 class AccountBLL
 {
@@ -24,36 +15,18 @@ class AccountBLL
               $this->AccountDAL = new AccountDAL();
        }
 
-       // Kiểm tra và làm sạch dữ liệu đầu vào
-       private function validateInput($input, $type = 'string', $maxLength = null)
-       {
-              $input = trim($input);
-              switch ($type) {
-                     case 'email':
-                            return filter_var($input, FILTER_VALIDATE_EMAIL)
-                            ? $input : null;
-                     case 'string':
-                            return (!is_null($maxLength) && strlen($input) > $maxLength)
-                            ? null : htmlspecialchars(strip_tags($input));
-                     case 'int':
-                            return filter_var($input, FILTER_VALIDATE_INT)
-                            ? (int)$input : null;
-                     default:
-                            return htmlspecialchars(strip_tags($input));
-              }
-       }
-
        // Check login
        function checkLogin()
        {
               if (session_status() == PHP_SESSION_NONE) {
                      session_start();
               }
+
               $result = array();
+
               if (isset($_SESSION['result']) && $_SESSION['result'] == "success") {
                      $obj = array(
                             "userName" => $_SESSION['username'],
-                            "passWord" => $_SESSION['passWord'],
                             "dateCreate" => $_SESSION['dateCreate'],
                             "accountStatus" => $_SESSION['accountStatus'],
                             "name" => $_SESSION['name'],
@@ -71,132 +44,215 @@ class AccountBLL
                      $obj = array("result" => "notFound");
                      $result[] = $obj;
               }
+
               return $result;
        }
 
        // Check username
        function checkUserName($userName)
        {
-              $userName = $this->validateInput($userName, 'string', 50);
-              if (is_null($userName)) {
-                     return array(array("result" => "invalidInput"));
-              }
               $user = $this->AccountDAL->getobj($userName);
               $result = array();
               if ($user == null) {
-                     $obj = array("result" => "notFound");
+                     $obj = array(
+                            "result" => "notFound"
+                     );
                      array_push($result, $obj);
+                     return $result;
               } else {
-                     $obj = array("result" => "success");
+                     $obj = array(
+                            "result" => "success"
+                     );
                      array_push($result, $obj);
+                     return $result;
               }
-              return $result;
        }
 
-       // Khôi phục mật khẩu
+       // Password reset
        function resetPass($userName, $email)
        {
-              $userName = $this->validateInput($userName, 'string', 50);
-              $email = $this->validateInput($email, 'email');
-              if (is_null($userName) || is_null($email)) {
-                     return array("mess" => "invalidInput");
-              }
-
               $user = $this->AccountDAL->getobj($userName);
-              if ($user != null && $email == $user->getEmail()) {
-                     $random_number = rand(1000, 9999);
-                     $mail = new PHPMailer(true);
-                     try {
-                            $mail->isSMTP();
-                            $mail->Host = 'smtp.gmail.com';
-                            $mail->SMTPAuth = true;
-                            $mail->Username = 'truongphuc056@gmail.com';
-                            $mail->Password = 'ppgkknqsnqztvuuf';
-                            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                            $mail->Port = 587;
-                            $mail->setFrom('truongphuc056@gmail.com', 'MINIMAL');
-                            $mail->addAddress($email, $userName);
-                            $mail->Subject = 'Email sending authentication code from MINIMAL store';
-                            $mail->Body = "This is your authentication code: $random_number";
-                            if ($mail->send()) {
-                                   return array(
-                                          "username" => $userName,
-                                          "email" => $email,
-                                          "codeReset" => $random_number,
-                                          "mess" => "success"
-                                   );
-                            } else {
-                                   return array("mess" => "failus to send mail");
-                            }
-                     } catch (Exception $e) {
-                            return array("mess" => "failus to send mail ! Exception");
+              if ($user != null) {
+                     if ($email == $user->getEmail()) {
+                            $random_number = rand(1000, 9999);
+                     } else {
+                            return array(
+                                   "mess" => "wrongMail"
+                            );
                      }
               } else {
-                     return array("mess" => is_null($user) ? "notFound" : "wrongMail");
+                     return array(
+                            "mess" => "notFound"
+                     );
               }
        }
 
-       // Login
+       // Login function
        function login($userName, $passWord)
        {
-              $userName = $this->validateInput($userName, 'string', 50);
-              $passWord = $this->validateInput($passWord, 'string', 255);
-              if (is_null($userName) || is_null($passWord)) {
-                     return array(array("result" => "invalidInput"));
-              }
-
               $user = $this->AccountDAL->getobj($userName);
               $result = array();
-              if ($user != null && $user->getPassword() === $passWord) {
-                     if ($user->getAccountStatus() === '1') {
-                            if (session_status() == PHP_SESSION_NONE) {
-                                   session_start();
+
+              if ($user != null) {
+                     $hashedPassword = $user->getPassword();
+       
+                     // Verify password using password_verify
+                     if (password_verify($passWord, $hashedPassword)) {
+                            $dateCreate = $user->getDateCreate();
+                            $accountStatus = $user->getAccountStatus();
+                            $name = $user->getName();
+                            $address = $user->getAddress();
+                            $email = $user->getEmail();
+                            $phoneNumber = $user->getPhoneNumber();
+                            $birth = $user->getBirth();
+                            $sex = $user->getSex();
+                            $codePermission = $user->getCodePermission();
+                            if ($accountStatus === '1') {
+                                   if (session_start()) {
+                                          $_SESSION['username'] = $userName;
+                                          $_SESSION['dateCreate'] = $dateCreate;
+                                          $_SESSION['accountStatus'] = $accountStatus;
+                                          $_SESSION['name'] = $name;
+                                          $_SESSION['address'] = $address;
+                                          $_SESSION['email'] = $email;
+                                          $_SESSION['phoneNumber'] = $phoneNumber;
+                                          $_SESSION['birth'] = $birth;
+                                          $_SESSION['sex'] = $sex;
+                                          $_SESSION['codePermission'] = $codePermission;
+                                          $_SESSION['result'] = "success";
+                                   }
+                                   $obj = array(
+                                          "userName" => $userName,
+                                          "dateCreate" => $dateCreate,
+                                          "accountStatus" => $accountStatus,
+                                          "name" => $name,
+                                          "address" => $address,
+                                          "email" => $email,
+                                          "phoneNumber" => $phoneNumber,
+                                          "birth" => $birth,
+                                          "sex" => $sex,
+                                          "codePermission" => $codePermission,
+                                          "result" => "success"
+                                   );
+                                   array_push($result, $obj);
+                                   return $result;
+                            } else {
+                                   $obj = array(
+                                          "result" => "block"
+                                   );
+                                   array_push($result, $obj);
+                                   return $result;
                             }
-                            $_SESSION['username'] = $userName;
-                            $_SESSION['passWord'] = $passWord;
-                            $_SESSION['result'] = "success";
+                     } else {
                             $obj = array(
-                                   "userName" => $userName,
-                                   "passWord" => $passWord,
-                                   "result" => "success"
+                                   "result" => "wrongPass",
+                                   "username" => $user->getUsername(),
+                                   "email" => $user->getEmail()
                             );
                             array_push($result, $obj);
-                     } else {
-                            array_push($result, array("result" => "block"));
+                            return $result;
                      }
               } else {
-                     array_push($result, array("result" => $user ? "wrongPass" : "notFound"));
+                     $obj = array(
+                            "result" => "notFound"
+                     );
+                     array_push($result, $obj);
+                     return $result;
               }
-              return $result;
        }
 
-       // Thêm một tài khoản vào database
+       // Add a new account to the database
        function addAccount($userName, $passWord, $dateCreate, $accountStatus, $name, $address, $email, $phoneNumber, $birth, $sex, $codePermission)
        {
-              $userName = $this->validateInput($userName, 'string', 50);
-              $passWord = $this->validateInput($passWord, 'string', 255);
-              $email = $this->validateInput($email, 'email');
-              if (is_null($userName) || is_null($passWord) || is_null($email)) {
-                     return array(array("result" => "invalidInput"));
-              }
-
-              $obj = new AccountDTO($userName, $passWord, $dateCreate, $accountStatus, $name, $address, $email, $phoneNumber, $birth, $sex, $codePermission);
+              // Hash password using password_hash
+              $hashedPassword = password_hash($passWord, PASSWORD_DEFAULT);
+              $obj = new AccountDTO($userName, $hashedPassword, $dateCreate, $accountStatus, $name, $address, $email, $phoneNumber, $birth, $sex, $codePermission);
+              $result = array();
               $check = $this->AccountDAL->addobj($obj);
-              return array(array("result" => $check ? "success" : "false"));
-       }
-
-       // Sửa một tài khoản
-       function updateAccount($userName, $passWord, $dateCreate, $accountStatus, $name, $address, $email, $phoneNumber, $birth, $sex, $codePermission)
-       {
-              $userName = $this->validateInput($userName, 'string', 50);
-              $passWord = $this->validateInput($passWord, 'string', 255);
-              $email = $this->validateInput($email, 'email');
-              if (is_null($userName) || is_null($passWord) || is_null($email)) {
-                     return array("mess" => "invalidInput");
+              if ($check == true) {
+                     $obj = array(
+                            "result" => "success"
+                     );
+                     array_push($result, $obj);
+                     return $result;
+              } else {
+                     $obj = array(
+                            "result" => "false"
+                     );
+                     array_push($result, $obj);
+                     return $result;
               }
-
-              $obj = new AccountDTO($userName, $passWord, $dateCreate, $accountStatus, $name, $address, $email, $phoneNumber, $birth, $sex, $codePermission);
-              $check = $this->AccountDAL->upadateObj($obj);
-              return array("mess" => $check ? "success" : "failus");
        }
 }
+
+// Menu
+header('Content-Type: application/json');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+       $check = new AccountBLL();
+       $function = $_POST['function'];
+
+       switch ($function) {
+              case 'login':
+                     $userName = $_POST['userName'];
+                     $passWord = $_POST['passWord'];
+                     $temp = $check->login($userName, $passWord);
+                     echo json_encode($temp);
+                     break;
+              case 'checkLogin':
+                     $temp = $check->checkLogin();
+                     echo json_encode($temp);
+                     break;
+              case 'logout_whenExitPage':
+                     $temp = $check->logout_whenExitPage();
+                     echo json_encode($temp);
+                     break;
+              case 'checkUserName':
+                     $userName = $_POST['userName'];
+                     $temp = $check->checkUserName($userName);
+                     echo json_encode($temp);
+                     break;
+              case 'addAccount':
+                     $userName = $_POST['userName'];
+                     $passWord = $_POST['passWord'];
+                     $dateCreate = $_POST['dateCreate'];
+                     $accountStatus = $_POST['accountStatus'];
+                     $name = $_POST['name'];
+                     $address = $_POST['address'];
+                     $email = $_POST['email'];
+                     $phoneNumber = $_POST['phoneNumber'];
+                     $birth = $_POST['birth'];
+                     $sex = $_POST['sex'];
+                     $codePermission = $_POST['codePermission'];
+                     $temp = $check->addAccount($userName, $passWord, $dateCreate, $accountStatus, $name, $address, $email, $phoneNumber, $birth, $sex, $codePermission);
+                     echo json_encode($temp);
+                     break;
+              case 'updateAccount':
+                     $userName = $_POST['userName'];
+                     $passWord = $_POST['passWord'];
+                     $dateCreate = $_POST['dateCreate'];
+                     $accountStatus = $_POST['accountStatus'];
+                     $name = $_POST['name'];
+                     $address = $_POST['address'];
+                     $email = $_POST['email'];
+                     $phoneNumber = $_POST['phoneNumber'];
+                     $birth = $_POST['birth'];
+                     $sex = $_POST['sex'];
+                     $codePermission = $_POST['codePermission'];
+                     $temp = $check->updateAccount($userName, $passWord, $dateCreate, $accountStatus, $name, $address, $email, $phoneNumber, $birth, $sex, $codePermission);
+                     echo json_encode($temp);
+                     break;
+              case 'getObjAccount':
+                     $userName = $_POST['userName'];
+                     $temp = $check->getObjAccount($userName);
+                     echo json_encode($temp);
+                     break;
+              case 'resetPass':
+                     $userName = $_POST['userName'];
+                     $email = $_POST['email'];
+                     $temp = $check->resetPass($userName, $email);
+                     echo json_encode($temp);
+                     break;
+       }
+}
+?>

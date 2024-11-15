@@ -22,13 +22,13 @@ class AccountDAL extends AbstractionDAL
        // Delete by ID
        function deleteByID($code)
        {
-              $userName_encode = base64_encode($this->validateInput($code));
+              $codeValidated = $this->validateInput($code); // Validate username
 
               $query = "SELECT COUNT(*) FROM feedback WHERE userName = ? 
                         UNION SELECT COUNT(*) FROM comment WHERE userNameComment = ? 
                         UNION SELECT COUNT(*) FROM orders WHERE userName = ?";
               $stmt = $this->actionSQL->prepare($query);
-              $stmt->bind_param('sss', $userName_encode, $userName_encode, $userName_encode);
+              $stmt->bind_param('sss', $codeValidated, $codeValidated, $codeValidated);
               $stmt->execute();
               $stmt->bind_result($count);
               $totalCount = 0;
@@ -41,7 +41,7 @@ class AccountDAL extends AbstractionDAL
               if ($totalCount == 0) {
                      $deleteQuery = "DELETE FROM accounts WHERE userName = ?";
                      $stmt = $this->actionSQL->prepare($deleteQuery);
-                     $stmt->bind_param('s', $userName_encode);
+                     $stmt->bind_param('s', $codeValidated);
                      $result = $stmt->execute();
                      $stmt->close();
                      return $result;
@@ -69,8 +69,8 @@ class AccountDAL extends AbstractionDAL
               if ($result->num_rows > 0) {
                      while ($data = $result->fetch_assoc()) {
                             $account = new AccountDTO(
-                                   base64_decode($data["userName"]),
-                                   base64_decode($data["passWord"]),
+                                   $data["userName"],
+                                   $data["passWord"],
                                    $data["dateCreated"],
                                    $data["accountStatus"],
                                    $data["name"],
@@ -91,17 +91,17 @@ class AccountDAL extends AbstractionDAL
        // Fetch single object by ID
        function getobj($code)
        {
-              $userName_encode = base64_encode($this->validateInput($code));
+              $codeValidated = $this->validateInput($code);
               $query = "SELECT * FROM accounts WHERE userName = ?";
               $stmt = $this->actionSQL->prepare($query);
-              $stmt->bind_param('s', $userName_encode);
+              $stmt->bind_param('s', $codeValidated);
               $stmt->execute();
               $result = $stmt->get_result();
 
               if ($data = $result->fetch_assoc()) {
                      return new AccountDTO(
-                            base64_decode($data["userName"]),
-                            base64_decode($data["passWord"]),
+                            $data["userName"],
+                            $data["passWord"],
                             $data["dateCreated"],
                             $data["accountStatus"],
                             $data["name"],
@@ -119,113 +119,115 @@ class AccountDAL extends AbstractionDAL
 
        // Add a new object
        function addobj($obj)
-{
-    if ($obj != null) {
-        $userName_encode = base64_encode($this->validateInput($obj->getUsername()));
-        $passWord_hash = password_hash($this->validateInput($obj->getPassword()), PASSWORD_BCRYPT);
-
-        // Check if the username already exists
-        $checkQuery = "SELECT * FROM accounts WHERE userName = ?";
-        $stmt = $this->actionSQL->prepare($checkQuery);
-        $stmt->bind_param('s', $userName_encode);
-        $stmt->execute();
-        $resultCheck = $stmt->get_result();
-
-        if ($resultCheck->num_rows < 1) {
-            // Insert the new user
-            $insertQuery = "INSERT INTO accounts 
-                            (userName, passWord, dateCreated, accountStatus, name, address, email, phoneNumber, birth, sex, codePermissions) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $this->actionSQL->prepare($insertQuery);
-            $stmt->bind_param(
-                'sssssssssss',
-                $userName_encode,
-                $passWord_hash,
-                $obj->getDateCreate(),
-                $obj->getAccountStatus(),
-                $obj->getName(),
-                $obj->getAddress(),
-                $obj->getEmail(),
-                $obj->getPhoneNumber(),
-                $obj->getBirth(),
-                $obj->getSex(),
-                $obj->getCodePermission()
-            );
-
-            if ($stmt->execute()) {
-                // Get the ID of the inserted record
-                $newUserId = $this->actionSQL->insert_id;
-
-                // Retrieve the newly created user details
-                $selectQuery = "SELECT * FROM accounts WHERE id = ?";
-                $stmt = $this->actionSQL->prepare($selectQuery);
-                $stmt->bind_param('i', $newUserId);
-                $stmt->execute();
-                $result = $stmt->get_result();
-
-                if ($result->num_rows == 1) {
-                    $newUser = $result->fetch_object(); // Fetch as an object
-                    $stmt->close();
-                    return $newUser; // Return the new user object
-                }
-            }
-        }
-        $stmt->close();
-        return false;
-    }
-    return false;
-}
-
-
-
-       // Update object
-       function updateobj($obj)
        {
               if ($obj != null) {
-                     $userName_encode = base64_encode($this->validateInput($obj->getUsername()));
-                     
-                     // Use password_hash to securely hash the new password
-                     $passWord_hash = password_hash($this->validateInput($obj->getPassword()), PASSWORD_BCRYPT);
+                     $userNameValidated = $this->validateInput($obj->getUsername());
 
-                     $updateQuery = "UPDATE accounts 
-                                   SET passWord = ?, dateCreated = ?, accountStatus = ?, name = ?, 
-                                          address = ?, email = ?, phoneNumber = ?, birth = ?, sex = ?, 
-                                          codePermissions = ? 
-                                   WHERE userName = ?";
-                     $stmt = $this->actionSQL->prepare($updateQuery);
-                     $stmt->bind_param(
-                     'sssssssssss',
-                     $passWord_hash,
-                     $obj->getDateCreate(),
-                     $obj->getAccountStatus(),
-                     $obj->getName(),
-                     $obj->getAddress(),
-                     $obj->getEmail(),
-                     $obj->getPhoneNumber(),
-                     $obj->getBirth(),
-                     $obj->getSex(),
-                     $obj->getCodePermission(),
-                     $userName_encode
-                     );
-                     $result = $stmt->execute();
+                     // Check if the username already exists
+                     $checkQuery = "SELECT * FROM accounts WHERE userName = ?";
+                     $stmt = $this->actionSQL->prepare($checkQuery);
+                     $stmt->bind_param('s', $userNameValidated);
+                     $stmt->execute();
+                     $resultCheck = $stmt->get_result();
+
+                     if ($resultCheck->num_rows < 1) {
+                            $createDate = $obj->getDateCreate();
+                            $passWord_hash = $obj->getPassword();
+                            $accountStatus = $obj->getAccountStatus();
+                            $name = $obj->getName();
+                            $address = $obj->getAddress();
+                            $email = $obj->getEmail();
+                            $phoneNumber = $obj->getPhoneNumber();
+                            $birthdate = $obj->getBirth();
+                            $sex = $obj->getSex();
+                            $codePermission = $obj->getCodePermission();
+
+                            // Insert the new user
+                            $insertQuery = "INSERT INTO accounts 
+                                            (userName, passWord, dateCreated, accountStatus, name, address, email, phoneNumber, birth, sex, codePermissions) 
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            $stmt = $this->actionSQL->prepare($insertQuery);
+                            $stmt->bind_param(
+                                   'sssssssssss',
+                                   $userNameValidated,
+                                   $passWord_hash,
+                                   $createDate,
+                                   $accountStatus,
+                                   $name,
+                                   $address,
+                                   $email,
+                                   $phoneNumber,
+                                   $birthdate,
+                                   $sex,
+                                   $codePermission
+                            );
+
+                            if ($stmt->execute()) {
+                                   return true;
+                            }
+                     }
                      $stmt->close();
-                     return $result;
               }
               return false;
        }
 
+       function updateObj($obj)
+       {
+              if ($obj != null) {
+                     $userName = $this->validateInput($obj->getUsername());
+                     $passWord_hash = password_hash($this->validateInput($obj->getPassword()), PASSWORD_DEFAULT);
+                     $dateCreate = $obj->getDateCreate();
+                     $accountStatus = $obj->getAccountStatus();
+                     $name = $obj->getName();
+                     $address = $obj->getAddress();
+                     $email = $obj->getEmail();
+                     $phoneNumber = $obj->getPhoneNumber();
+                     $birth = $obj->getBirth();
+                     $sex = $obj->getSex();
+                     $codePermission = $obj->getCodePermission();
 
-       // Update account status
+                     // Update SQL query
+                     $string = "UPDATE accounts 
+                                SET passWord = ?, 
+                                    dateCreated = ?, 
+                                    accountStatus = ?, 
+                                    name = ?, 
+                                    address = ?, 
+                                    email = ?, 
+                                    phoneNumber = ?, 
+                                    birth = ?, 
+                                    sex = ?, 
+                                    codePermissions = ? 
+                                WHERE userName = ?";
+
+                     $stmt = $this->actionSQL->prepare($string);
+                     $stmt->bind_param(
+                            'sssssssssss', 
+                            $passWord_hash, 
+                            $dateCreate, 
+                            $accountStatus, 
+                            $name, 
+                            $address, 
+                            $email, 
+                            $phoneNumber, 
+                            $birth, 
+                            $sex, 
+                            $codePermission, 
+                            $userName
+                     );
+                     return $stmt->execute();
+              }
+              return false;
+       }
+
        function updateStateUser($userName, $accountStatus)
        {
-              $userName_encode = base64_encode($this->validateInput($userName));
-              $newStatus = ($accountStatus == '1') ? '0' : '1';
+              $userNameValidated = $this->validateInput($userName);
+              $status = ($accountStatus == '1') ? '0' : '1';
+              $string = "UPDATE accounts SET accountStatus = ? WHERE userName = ?";
 
-              $updateQuery = "UPDATE accounts SET accountStatus = ? WHERE userName = ?";
-              $stmt = $this->actionSQL->prepare($updateQuery);
-              $stmt->bind_param('ss', $newStatus, $userName_encode);
-              $result = $stmt->execute();
-              $stmt->close();
-              return $result;
+              $stmt = $this->actionSQL->prepare($string);
+              $stmt->bind_param('ss', $status, $userNameValidated);
+              return $stmt->execute();
        }
 }
